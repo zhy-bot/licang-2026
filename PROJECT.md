@@ -12,8 +12,8 @@
 - 4号电机：右后轮。
 - USART3，115200：四台电机驱动器通信。
 - USART2，PD5/PD6，9600：JY60/JY61P 通信。
-- UART5，PC12/PD2，115200：PC/VOFA 命令和路径调试接口（PC12=TX，PD2=RX）。
-- USART1，PA9/PA10，115200：仓库转盘专用张大头闭环步进电机（PA9=TX，PA10=RX，地址 `0x05`）。
+- UART5，PC12/PD2，115200：PC/VOFA ASCII 比赛调试接口（PC12=TX，PD2=RX）。
+- USART6，PC6/PC7，115200：仓库转盘专用张大头闭环步进电机（PC6=TX，PC7=RX，地址 `0x05`）。
 - 麦轮直径：75 mm。
 - 麦轮坐标：车头方向为 `+X`，车体左侧为 `+Y`，逆时针旋转为 `+Omega`。
 - 当前 X 型麦轮方向矩阵：前进 `++++`，左移 `-++-`，逆时针 `-+-+`。
@@ -21,12 +21,11 @@
 ## 模块结构
 
 - `Core/`：CubeMX 系统、时钟、GPIO、串口和 FreeRTOS 初始化。
-- `App/competition_path.*`：比赛路径编排层，只按顺序调用 `MotionControl` 公共接口，不包含驱动协议、麦轮公式或 IMU 解析。
 - `Motor/motor_control.*`：张大头驱动协议、地址和安装方向、`F6/FD` 命令、四轴缓存与同步触发。
 - `Motor/mecanum_kinematics.*`：不依赖 HAL 的麦轮运动学解算和等比例限幅。
 - `Motor/motion_control.*`：速度时间积分距离、软件加减速、20 ms实时航向 PD、任意角度平移、故障停车和动作序列。
 - `IMU/jy61p.*`：JY60/JY61P 数据帧解析、连续航向角和串口中断接收。
-- `App/uart_command.*`：UART5 ASCII 命令接收、解析、路径编辑、状态查询和 FreeRTOS 命令投递。
+- `App/uart_command.*`：UART5 ASCII 命令接收、解析、精简状态查询和 FreeRTOS 命令投递。
 - `Motor/cangku_motor.*`：仓库转盘的单电机 Emm V5.0/x42 协议层；只操作 USART1 地址 `0x05`，不与底盘四轮共用状态。
 - `App/turntable_control.*`：仓库转盘一格相对运动、启用、停止及集中等待策略。
 - `App/warehouse_control.*`：机械臂组 2（夹取）完成后的仓库协同和六球计数状态机，由现有 `ChassisTask` 调用，不新建重复任务。
@@ -44,11 +43,17 @@
 - 通用麦轮限幅保持四轮比例。
 - 平移方向统一使用极坐标：0°前进、+90°左移、180°后退、-90°右移，角度范围为 -180°～+180°。
 - 指定的极坐标距离表示实际平移轨迹长度；每个控制周期把轮速限幅后的有效平移 RPM 纳入距离积分。
-- `MotionControl_RunDefaultSequence()` 的独立测试仍由 `DIAGONAL_TEST_ENABLE` 控制；正式 FreeRTOS 路径由 `App/competition_path.c` 管理。
-- 当前正式路径为左前 `+30°` 斜线运行 1800 mm，并软减速到 0。
+- 现场运动测试只通过 UART5 命令完成；不再保留 PATH 编辑器、独立上电测试和旧的运动包装接口。
+- UART5 保留 F/B/L/R、LF/RF/LR/RR、ROT、BALL、GRAB、RZ、STOP、STATUS、HELP。
+- 平移统一使用 `MotionControl_MovePolarSegmentMm()`；纯横移额外使用唯一的 `LATERAL_FORWARD_COMPENSATION` 前后偏差补偿，初值为 `0.0f`。
+- `MotionControl_SetBodySpeed()` 和 `MotionControl_GetHeadingCorrection()` 是灰度校准、RZ 与普通平移共用的底盘速度/航向接口；航向 PD 参数只在 `Motor/motion_control.c` 保留一套。
 - FreeRTOS 启动后由 `ChassisTask` 完成 `MotionControl_Init`、IMU 等待、四轮使能和锁头基准建立，再等待 UART5 命令；`main.c` 不再直接执行底盘动作。
-- UART5 接收使用单字节 `HAL_UART_Receive_IT()`；UART5 中断只收字节和投递行缓冲，运动命令统一由 `ChassisTask` 执行。
-- 当前正式路径保留在编译代码中，用户路径使用独立的静态 RAM 表，最多 20 段；`PATH LOAD DEFAULT` 将当前编译默认路径载入 RAM。
+- UART5 接收使用单字节 `HAL_UART_Receive_IT()`；UART5 中断只收字节和投递行缓冲，运动命令统一由 `ChassisTask` 执行。任务只维护 Ready、Busy 和 LastStatus。
+
+## UART5 现场 STATUS
+
+- `STATUS` 只输出 `STATE`、`IMU`、`YAW`、`HEAD_ERR`、`HEAD_CORR`、`DIST`、`TARGET`、`LAST`、`BALL_STATE`、`BALL_ROUND`、`WAREHOUSE_BALL` 和 `STOP`。
+- MaixCAM、机械臂和转盘的实际错误处理仍保留，但不再为 STATUS 保存或输出仅用于调试的收发计数、动作计数和预计时间统计。
 
 ## 用户工作偏好
 
@@ -68,10 +73,25 @@
 ## MaixCAM ball handshake (2026-08-25)
 
 - UART4 connects to MaixCAM at 115200-8-N-1: PC10=TX and PC11=RX. Use 3.3 V TTL, cross-connect TX/RX and share GND.
-- `App/maixcam_link.*` owns UART4 byte reception and accepts only an ASCII reply line `1` as a MaixCAM acknowledgement; outgoing request frame is always `1\r\n`. The deployed `licang_BLUE_RED_BALL.py` sends that reply only when a color/shape-qualified target is inside the configured green trigger zone for three consecutive frames; a single threshold-noise blob must not start an arm action.
+- `App/maixcam_link.*` owns UART4 byte reception and accepts only an ASCII reply line `1` as a MaixCAM acknowledgement; outgoing request is one byte, `1` for red or `2` for blue. The deployed `licang_BLUE_RED_BALL.py` accepts a new command only after the prior request state is cleared, waits 150 ms, and sends that reply only when a color/shape-qualified target is inside the configured green trigger zone for three consecutive frames; a single threshold-noise blob must not start an arm action.
 - UART5 command `BALL` first runs action group 1 (return/recognition posture). It then runs the remaining rounds of the current six-ball warehouse batch: request MaixCAM, wait up to 10 s for reply `1`, run action group 2 (clamp), turn the warehouse one slot, then run action group 1 (return). The sixth group-2 completion also turns one slot and is followed by group 1 return.
 - `GRAB` remains a separate single cycle: group 2 (clamp) -> one turntable slot -> group 1 (return). While a BALL batch runs, all ordinary chassis, `GRAB` and new `BALL` commands remain busy.
 - MaixCAM timeout or UART4 transmission failure starts no servo action and allows a later `BALL` retry. A group 1/2 communication failure retains the existing arm error lock. `STOP` cancels an acknowledgement wait immediately; during group 2/turntable it still completes group 1 (return) before ending the remaining batch.
+
+## BALL gray alignment (2026-08-25)
+
+- The four gray sensors are ordered from left to right as `MID2`, `IN2`, `IN1`, `MID1`: `MID2=PD8`, `IN2=PD0`, `IN1=PD1`, `MID1=PD3`.
+- Inputs use GPIO pull-ups and active-low line detection. The logical `OnLine` order is therefore `0 1 1 0` for the only valid alignment state: both inner sensors on the line and both outer sensors off the line.
+- `App/gray_align.*` runs before BALL action group 1. It locks the current continuous JY61P yaw at entry, moves only along the left/right axis at 25 RPM, and applies a small heading PD correction (`KP=2.0`, `KD=0.15`, limit 8 RPM) during the lateral move. It holds the exact target for 50 ms, stops all wheels, and resets the continuous JY61P yaw before returning success. The alignment timeout is 5 s.
+- `MID1`/`MID2` are overshoot protection sensors, not completion sensors. If either is on, the chassis retreats while maintaining the locked yaw; otherwise it approaches. IN1/IN2 appearing in sequence never commands a chassis rotation. IMU loss during alignment stops the chassis and returns an alignment error.
+
+## RZ pillar ball sequence (2026-08-26)
+
+- UART5 command `RZ` enters the existing `ChassisCommandQueue` and is executed by `ChassisTask`; it first uses PD10 to approach the pillar, locks the yaw during chassis positioning, performs the existing post-IR polar move, then stops and settles before any arm or vision action.
+- After the chassis is positioned, RZ starts `SERVO_ACTION_PILLAR_CAMERA_GROUP` (group 3) once without requiring a completion frame, waits the fixed `RZ_CAMERA_RAISE_WAIT_MS` mechanical interval, and then starts `RoundPillar_OrbitAndGrab()`. The integrated routine sends the first red request and keeps the two-stage pillar orbit active while polling the MaixCAM reply.
+- A valid reply stops and settles the chassis before `SERVO_ACTION_PILLAR_GRAB_GROUP` (group 4); after Group4 completes, the next red request is sent and the orbit resumes from the current continuous yaw. The CW 720-degree stage and same-path reverse 90-degree stage both use this non-blocking vision loop at the calibrated `63/49 RPM` body-speed pair, and RZ completes only after both the trajectory and four grabs finish.
+- Group 4 contains clamp, release and camera re-positioning, so group 3 is never repeated. RZ does not call `BALL`, group 1, group 2, `WarehouseControl` or the turntable.
+- STOP during approach or MaixCAM waiting cancels before the next arm action. Once group 3 or group 4 starts, that group is allowed to finish; a pending STOP is handled before the next vision request. MaixCAM and servo failures map to their dedicated RZ result statuses and do not trigger later group 4 actions.
 
 ## Warehouse turntable coordination (2026-08-25)
 
@@ -86,5 +106,5 @@
 
 - `MotionControl_RotateDeg(angle_deg)` rotates about the chassis centre using the existing mecanum inverse kinematics: positive angle is counter-clockwise/left and negative angle is clockwise/right.
 - Rotation is measured only by `Jy61P_GetContinuousYaw()`; it has no time- or encoder-pulse-based completion estimate. The heading baseline is reset at the start and after a settled successful rotation, so following translation holds the new vehicle heading.
-- UART5 accepts `ROT CCW <deg>` / `ROT CW <deg>` (1..360 degrees). User paths accept `PATH ADD ROT CCW <deg>` / `PATH ADD ROT CW <deg>`; a rotation is a hard path boundary rather than a blended translation segment.
+- UART5 accepts `ROT CCW <deg>` / `ROT CW <deg>` (1..360 degrees)；旋转由 `ChassisTask` 直接执行，不再经过路径编辑器。
 - Default parameters are 50 RPM cruise, 15 RPM approach, 8 RPM minimum effective speed, deceleration from 30 degrees, fine control from 10 degrees, 0.8-degree tolerance, five 20-ms settle periods, 250-ms ramp, and 8-s timeout.

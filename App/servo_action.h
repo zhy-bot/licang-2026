@@ -8,9 +8,13 @@
 #define SERVO_ACTION_START_GROUP           0U
 #define SERVO_ACTION_RETURN_GROUP          1U
 #define SERVO_ACTION_GRAB_GROUP            2U
+#define SERVO_ACTION_PILLAR_CAMERA_GROUP   3U
+#define SERVO_ACTION_PILLAR_GRAB_GROUP     4U
 #define SERVO_ACTION_START_TIMEOUT_MS      3000U
 #define SERVO_ACTION_GRAB_TIMEOUT_MS       15000U
 #define SERVO_ACTION_RETURN_TIMEOUT_MS     15000U
+#define SERVO_ACTION_PILLAR_CAMERA_TIMEOUT_MS 15000U
+#define SERVO_ACTION_PILLAR_GRAB_TIMEOUT_MS   20000U
 
 typedef enum
 {
@@ -32,8 +36,6 @@ typedef enum
 
 extern volatile ServoActionStatus ServoAction_LastStatus;
 extern volatile ServoActionSequenceState ServoAction_SequenceState;
-extern volatile uint8_t ServoAction_MotionCompletedCount;
-extern volatile uint8_t ServoAction_LastCompletedGroup;
 
 void ServoAction_Init(UART_HandleTypeDef *huart);
 /* Send an action-group request without waiting for a completion frame. */

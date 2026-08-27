@@ -537,16 +537,6 @@
           <GroupName>App</GroupName>
           <Files>
             <File>
-              <FileName>competition_path.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../App/competition_path.c</FilePath>
-            </File>
-            <File>
-              <FileName>competition_path.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>../App/competition_path.h</FilePath>
-            </File>
-            <File>
               <FileName>uart_command.c</FileName>
               <FileType>1</FileType>
               <FilePath>../App/uart_command.c</FilePath>
@@ -585,6 +575,26 @@
               <FileName>ball_sequence.h</FileName>
               <FileType>5</FileType>
               <FilePath>../App/ball_sequence.h</FilePath>
+            </File>
+            <File>
+              <FileName>gray_align.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../App/gray_align.c</FilePath>
+            </File>
+            <File>
+              <FileName>gray_align.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../App/gray_align.h</FilePath>
+            </File>
+            <File>
+              <FileName>round_pillar.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../App/round_pillar.c</FilePath>
+            </File>
+            <File>
+              <FileName>round_pillar.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../App/round_pillar.h</FilePath>
             </File>
             <File>
               <FileName>turntable_control.c</FileName>
