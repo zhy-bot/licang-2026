@@ -587,6 +587,16 @@
               <FilePath>../App/gray_align.h</FilePath>
             </File>
             <File>
+              <FileName>stair_sequence.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../App/stair_sequence.c</FilePath>
+            </File>
+            <File>
+              <FileName>stair_sequence.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../App/stair_sequence.h</FilePath>
+            </File>
+            <File>
               <FileName>round_pillar.c</FileName>
               <FileType>1</FileType>
               <FilePath>../App/round_pillar.c</FilePath>
